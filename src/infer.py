@@ -29,7 +29,7 @@ def main():
     set_seed(SEED)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    BASE_DIR = Path(__file__).resolve().parent
+    BASE_DIR = Path(__file__).resolve().parent.parent
     PROCESSED_CSV = BASE_DIR / "data" / "processed" / "indonesia_processed.csv"
     ZONE_CSV = BASE_DIR / "data" / "processed" / "indonesia_zones.csv"
     MODEL_PATH = BASE_DIR / "models" / "transformer_model.pth"

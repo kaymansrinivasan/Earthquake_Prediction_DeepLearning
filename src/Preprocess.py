@@ -1,58 +1,98 @@
-#!/usr/bin/env python3
-"""
-preprocess.py: Load raw CSV, clean, create features (time, rolling stats, energy, etc.), and save processed CSV.
-"""
-import logging
-from pathlib import Path
 import pandas as pd
+import numpy as np
+from pathlib import Path
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
 
-# Configuration
-BASE_DIR = Path(__file__).resolve().parent
-RAW_CSV = BASE_DIR / "data" / "raw" / "indonesia_raw.csv"
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-PROCESSED_CSV = PROCESSED_DIR / "indonesia_processed.csv"
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
-    try:
-        df = pd.read_csv(RAW_CSV)
-    except FileNotFoundError as e:
-        logging.error(f"Raw data file not found: {e}")
-        return
-    logging.info(f"Loaded raw data ({len(df)} records)")
+RAW_DATA_PATH = BASE_DIR / "data" / "raw" / "indonesia_raw.csv"
+PROCESSED_DATA_PATH = BASE_DIR / "data" / "processed" / "indonesia_processed.csv"
 
-    # Drop rows missing critical fields
-    required_cols = ['time', 'latitude', 'longitude', 'depth', 'mag']
-    df = df.dropna(subset=required_cols)
-    logging.info(f"After dropping NaN in {required_cols}: {len(df)} records")
+# Load raw dataset
+df = pd.read_csv(RAW_DATA_PATH)
 
-    # Parse time and sort
-    df['time'] = pd.to_datetime(df['time'])
-    df = df.sort_values('time').reset_index(drop=True)
+# -----------------------------
+# Basic Cleaning
+# -----------------------------
+required_cols = ['time', 'latitude', 'longitude', 'depth', 'mag']
 
-    # Temporal features
-    df['year'] = df['time'].dt.year
-    df['month'] = df['time'].dt.month
-    df['day'] = df['time'].dt.day
-    df['hour'] = df['time'].dt.hour
-    df['time_diff_hours'] = df['time'].diff().dt.total_seconds() / 3600.0
-    df['time_diff_hours'].fillna(0, inplace=True)
+df = df.dropna(subset=required_cols)
 
-    # Rolling statistics on magnitude
-    for window in [10, 30, 50]:
-        df[f'mag_roll_mean_{window}'] = df['mag'].rolling(window, min_periods=1).mean()
-        df[f'mag_roll_std_{window}'] = df['mag'].rolling(window, min_periods=1).std()
+df['time'] = pd.to_datetime(df['time'])
 
-    # Compute energy release (log10 Joules) from magnitude
-    df['energy_log10J'] = 1.5 * df['mag'] + 4.8
+df = df.sort_values('time').reset_index(drop=True)
 
-    # Label large events (M>=5.0)
-    df['large_event'] = (df['mag'] >= 5.0).astype(int)
+# -----------------------------
+# Temporal Features
+# -----------------------------
+df['year'] = df['time'].dt.year
+df['month'] = df['time'].dt.month
+df['day'] = df['time'].dt.day
+df['hour'] = df['time'].dt.hour
 
-    # Save processed CSV
-    df.to_csv(PROCESSED_CSV, index=False)
-    logging.info(f"Saved processed data to {PROCESSED_CSV} ({len(df)} records)")
+df['time_diff_hours'] = (
+    df['time']
+    .diff()
+    .dt.total_seconds()
+    .div(3600)
+    .fillna(0)
+)
 
-if __name__ == "__main__":
-    main()
+# -----------------------------
+# Rolling Statistics
+# -----------------------------
+window = 30
+
+df['rolling_mag_mean'] = df['mag'].rolling(window).mean()
+df['rolling_mag_std'] = df['mag'].rolling(window).std()
+df['rolling_mag_max'] = df['mag'].rolling(window).max()
+
+# -----------------------------
+# Energy Release Feature
+# -----------------------------
+df['energy_release'] = 10 ** (1.5 * df['mag'])
+
+# -----------------------------
+# Large Event Classification
+# -----------------------------
+df['large_event'] = (df['mag'] >= 5.0).astype(int)
+
+# -----------------------------
+# DBSCAN Seismic Zoning
+# -----------------------------
+coords = df[['latitude', 'longitude']].values
+
+coords_rad = np.radians(coords)
+
+earth_radius_km = 6371.0
+eps_km = 150
+
+eps_rad = eps_km / earth_radius_km
+
+dbscan = DBSCAN(
+    eps=eps_rad,
+    min_samples=20,
+    metric='haversine'
+)
+
+df['seismic_zone'] = dbscan.fit_predict(coords_rad)
+
+# -----------------------------
+# Remove NaNs after rolling ops
+# -----------------------------
+df = df.dropna().reset_index(drop=True)
+
+# -----------------------------
+# Save Processed Dataset
+# -----------------------------
+PROCESSED_DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+df.to_csv(PROCESSED_DATA_PATH, index=False)
+
+print("Processed dataset saved:")
+print(PROCESSED_DATA_PATH)
+
+print(df.head())
+
+print(df['seismic_zone'].value_counts())

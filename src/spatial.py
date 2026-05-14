@@ -9,7 +9,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 
 # Configuration
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 PROCESSED_CSV = BASE_DIR / "data" / "processed" / "indonesia_processed.csv"
 OUTPUT_DIR = BASE_DIR / "data" / "processed"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

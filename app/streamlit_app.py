@@ -24,8 +24,8 @@ px.defaults.template = "plotly_white"
 # Option 1: Absolute path (example)
 # csv_path = r"C:\Users\User\PyCharmMiscProject\data\indonesia_earthquake_data.csv"
 # Option 2: Project-relative path using BASE_DIR
-BASE_DIR = Path(__file__).resolve().parent
-csv_path = BASE_DIR / "data" / "indonesia_earthquake_data.csv"
+BASE_DIR = Path(__file__).resolve().parent.parent
+csv_path = BASE_DIR / "data" / "processed" / "indonesia_processed.csv"
 
 # =========================
 # Load Data with Caching

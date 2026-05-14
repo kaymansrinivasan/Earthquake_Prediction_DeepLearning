@@ -41,7 +41,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Paths
-    BASE_DIR = Path(__file__).resolve().parent
+    BASE_DIR = Path(__file__).resolve().parent.parent
     PROCESSED_CSV = BASE_DIR / "data" / "processed" / "indonesia_processed.csv"
     ZONE_CSV = BASE_DIR / "data" / "processed" / "indonesia_zones.csv"
 
@@ -117,7 +117,7 @@ def main():
 
     # Compute metrics
     mae = mean_absolute_error(true_mag, pred_mag)
-    rmse = mean_squared_error(true_mag, pred_mag, squared=False)
+    rmse = np.sqrt(mean_squared_error(true_mag, pred_mag))
     try:
         auc = roc_auc_score(true_large, pred_large)
     except ValueError:
