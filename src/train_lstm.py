@@ -13,13 +13,13 @@ import torch.nn as nn
 from sklearn.metrics import mean_absolute_error, mean_squared_error, roc_auc_score, accuracy_score
 
 from sequences import EarthquakeDataset
-from model import TransformerModel
+from lstm_model import LSTMModel
 
 # Example configuration
 config = {
     'seed': 42,
     'batch_size': 32,
-    'epochs': 10,
+    'epochs': 30,
     'lr': 1e-4,
     'window': 30,
     'stride': 1,
@@ -47,12 +47,9 @@ def main():
 
     # Load processed data and zones, merge
     df = pd.read_csv(PROCESSED_CSV)
-    zones = pd.read_csv(ZONE_CSV) if ZONE_CSV.exists() else None
-    if zones is not None and 'id' in zones.columns:
-        df = df.merge(zones, on='id', how='left')
-        df['zone'].fillna(-1, inplace=True)
-    else:
-        df['zone'] = 0
+    # seismic_zone already exists in processed data
+    if 'seismic_zone' not in df.columns:
+        raise ValueError("seismic_zone column not found in processed dataset")
     df = df.sort_values('time').reset_index(drop=True)
     # Save merged data temporarily
     merged_csv = BASE_DIR / "data" / "processed" / "indonesia_merged.csv"
@@ -80,14 +77,16 @@ def main():
 
     # Model instantiation
     n_zones = int(df['seismic_zone'].max() + 1)
+
     print("Number of zones:", n_zones)
     print(df['seismic_zone'].value_counts())
-    model = TransformerModel(input_dim=len(dataset.feature_cols),
-                             embed_dim=config['embed_dim'],
-                             num_heads=config['n_heads'],
-                             num_layers=config['n_layers'],
-                             dropout=config['dropout'],
-                             num_zones=n_zones).to(device)
+
+    model = LSTMModel(
+        input_dim=len(dataset.feature_cols),
+        hidden_dim=64,
+        num_zones=n_zones
+    ).to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
     # Loss functions
     criterion_mag = nn.MSELoss()
@@ -145,7 +144,7 @@ def main():
     # Save model checkpoint
     MODEL_DIR = BASE_DIR / "models"
     MODEL_DIR.mkdir(exist_ok=True)
-    model_path = MODEL_DIR / "transformer_model.pth"
+    model_path = MODEL_DIR / "lstm_model.pth"
     torch.save(model.state_dict(), model_path)
     logging.info(f"Saved model checkpoint to {model_path}")
 

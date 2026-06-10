@@ -14,7 +14,7 @@ class EarthquakeDataset(Dataset):
     PyTorch Dataset for earthquake sequences. Each sample contains a sequence of past events and multi-task targets.
     """
     def __init__(self, csv_file: Path, window: int, stride: int = 1, feature_cols: List[str] = None,
-                 zone_col: str = 'zone', mag_col: str = 'mag', large_col: str = 'large_event'):
+                 zone_col: str = 'seismic_zone', mag_col: str = 'mag', large_col: str = 'large_event'):
         """
         Args:
             csv_file: Path to processed CSV with features and labels.
@@ -28,7 +28,32 @@ class EarthquakeDataset(Dataset):
         df = pd.read_csv(csv_file)
         if feature_cols is None:
             # Default features: latitude, longitude, depth, magnitude, time difference
-            feature_cols = ['latitude', 'longitude', 'depth', 'mag', 'time_diff_hours']
+            feature_cols = [
+                'latitude',
+                'longitude',
+                'depth',
+                'mag',
+
+                'time_diff_hours',
+                'days_since_last_quake',
+
+                'mag_change',
+                'depth_change',
+
+                'rolling_mag_mean',
+                'rolling_mag_std',
+                'rolling_mag_max',
+
+                'rolling_depth_mean',
+                'rolling_depth_std',
+
+                'energy_release',
+                'rolling_energy_mean',
+
+                'month',
+                'day',
+                'hour'
+            ]
         self.feature_cols = feature_cols
 
         self.X = []
@@ -51,10 +76,19 @@ class EarthquakeDataset(Dataset):
             self.y_zone.append(int(target[zone_col]) if zone_col in data.columns else 0)
             self.y_large.append(float(target[large_col]))
 
-        self.X = torch.tensor(self.X)  # shape: (N, window, features)
-        self.y_mag = torch.tensor(self.y_mag).unsqueeze(1)  # shape: (N, 1)
+        self.X = torch.tensor(
+            np.array(self.X),
+            dtype=torch.float32
+        )
+        self.y_mag = torch.tensor(
+            self.y_mag,
+            dtype=torch.float32
+        ).unsqueeze(1)
         self.y_zone = torch.tensor(self.y_zone, dtype=torch.long)  # shape: (N,)
-        self.y_large = torch.tensor(self.y_large).unsqueeze(1)  # shape: (N, 1)
+        self.y_large = torch.tensor(
+            self.y_large,
+            dtype=torch.float32
+        ).unsqueeze(1)
 
     def __len__(self) -> int:
         return self.X.shape[0]

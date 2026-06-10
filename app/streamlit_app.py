@@ -40,6 +40,10 @@ df = None
 if csv_path.exists():
     try:
         df = load_data(csv_path)
+
+        # Convert time column to datetime
+        df['time'] = pd.to_datetime(df['time'], errors='coerce')
+
     except Exception as e:
         st.error(f"Error reading data: {e}")
 else:
@@ -191,7 +195,7 @@ if total_events:
         color_continuous_scale=px.colors.cyclical.IceFire,
         size_max=15,
         zoom=5,
-        mapbox_style="open-street-map",
+        map_style="open-street-map",
         title="Earthquake epicenters coloured by zone"
     )
     # Enable clustering (if many points)【5†L282-L288】
@@ -217,7 +221,7 @@ else:
 st.subheader("Temporal Trends (Events per Month)")
 if total_events:
     # Resample events count per month
-    df_time = filtered.set_index("time").resample('M').size().reset_index(name='counts')
+    df_time = filtered.set_index("time").resample('ME').size().reset_index(name='counts')
     time_fig = px.line(
         df_time, x="time", y="counts",
         labels={"time": "Date", "counts": "Number of Events"},
@@ -242,23 +246,34 @@ else:
 # Transformer Prediction & Large-Event Gauge
 # =========================
 st.subheader("Forecasted Earthquake")
-if model:
-    # Example: use model to predict (placeholder code)
-    # predicted = model.predict(filtered_features)
-    # For demo, simulate:
-    predicted_mag = 5.3
-    uncertainty = 0.4
-    predicted_zone = int(filtered['seismic_zone'].mode()[0]) if total_events else None
-    prob_large = filtered['mag'].ge(5.0).mean()
-else:
-    st.info("No trained model found: displaying simulated forecast.")
-    predicted_mag = 5.0
-    uncertainty = 0.6
-    predicted_zone = int(filtered['seismic_zone'].mode()[0]) if total_events else None
-    prob_large = filtered['mag'].ge(5.0).mean()
 
-st.markdown(f"**Predicted Magnitude:** {predicted_mag:.1f} ± {uncertainty}")
-st.markdown(f"**Predicted Zone:** {predicted_zone}")
+predictions_path = BASE_DIR / "outputs" / "predictions.csv"
+
+if predictions_path.exists():
+
+    pred_df = pd.read_csv(predictions_path)
+
+    latest_pred = pred_df.iloc[-1]
+
+    predicted_mag = float(latest_pred["pred_mag"])
+    predicted_zone = int(latest_pred["pred_zone"])
+    prob_large = float(latest_pred["pred_large_prob"])
+
+    uncertainty = 0.1
+
+else:
+    st.warning("Predictions file not found.")
+
+    predicted_mag = 0
+    predicted_zone = 0
+    prob_large = 0
+    uncertainty = 0
+
+st.markdown(f"**Predicted Magnitude:** {predicted_mag:.2f} ± {uncertainty}")
+st.markdown(
+    f"**Predicted Seismic Zone:** {predicted_zone} "
+    "(DBSCAN cluster representing the most likely earthquake region)"
+)
 
 st.subheader("Probability of M≥5 Event")
 gauge_fig = go.Figure(go.Indicator(
@@ -316,4 +331,4 @@ with st.expander("Methodology & Data"):
 # =========================
 st.markdown("---")
 st.caption("FYP2 Project – Hybrid Spatio-Temporal Transformer for Earthquake Forecasting")
-
+#streamlit run app\streamlit_app.py

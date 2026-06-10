@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,6 +11,7 @@ PROCESSED_DATA_PATH = BASE_DIR / "data" / "processed" / "indonesia_processed.csv
 
 # Load raw dataset
 df = pd.read_csv(RAW_DATA_PATH)
+
 
 # -----------------------------
 # Basic Cleaning
@@ -38,6 +39,20 @@ df['time_diff_hours'] = (
     .div(3600)
     .fillna(0)
 )
+# Days since previous earthquake
+df['days_since_last_quake'] = (
+    df['time']
+    .diff()
+    .dt.total_seconds()
+    .div(86400)
+    .fillna(0)
+)
+
+# Magnitude change from previous event
+df['mag_change'] = df['mag'].diff().fillna(0)
+
+# Depth change from previous event
+df['depth_change'] = df['depth'].diff().fillna(0)
 
 # -----------------------------
 # Rolling Statistics
@@ -48,35 +63,42 @@ df['rolling_mag_mean'] = df['mag'].rolling(window).mean()
 df['rolling_mag_std'] = df['mag'].rolling(window).std()
 df['rolling_mag_max'] = df['mag'].rolling(window).max()
 
+df['rolling_depth_mean'] = df['depth'].rolling(window).mean()
+df['rolling_depth_std'] = df['depth'].rolling(window).std()
+
+
+
 # -----------------------------
 # Energy Release Feature
 # -----------------------------
-df['energy_release'] = 10 ** (1.5 * df['mag'])
+df['energy_release'] = 10 ** (1.5 * df['mag'] + 4.8)
+
+df['rolling_energy_mean'] = (
+    df['energy_release']
+    .rolling(window)
+    .mean()
+)
 
 # -----------------------------
 # Large Event Classification
 # -----------------------------
 df['large_event'] = (df['mag'] >= 5.0).astype(int)
+print("\nLarge Event Distribution:")
+print(df['large_event'].value_counts())
+print(df['large_event'].value_counts(normalize=True))
 
 # -----------------------------
-# DBSCAN Seismic Zoning
+# kmeans Seismic Zoning
 # -----------------------------
 coords = df[['latitude', 'longitude']].values
 
-coords_rad = np.radians(coords)
-
-earth_radius_km = 6371.0
-eps_km = 150
-
-eps_rad = eps_km / earth_radius_km
-
-dbscan = DBSCAN(
-    eps=eps_rad,
-    min_samples=20,
-    metric='haversine'
+kmeans = KMeans(
+    n_clusters=5,
+    random_state=42,
+    n_init=10
 )
 
-df['seismic_zone'] = dbscan.fit_predict(coords_rad)
+df['seismic_zone'] = kmeans.fit_predict(coords)
 
 # -----------------------------
 # Remove NaNs after rolling ops
@@ -96,3 +118,4 @@ print(PROCESSED_DATA_PATH)
 print(df.head())
 
 print(df['seismic_zone'].value_counts())
+print(df.columns.tolist())
